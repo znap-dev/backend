@@ -184,7 +184,7 @@ async function rateLimiter(req, res, next) {
   next();
 }
 
-// app.use(rateLimiter); // Rate limit devre dışı
+// app.use(rateLimiter);
 
 // ============================================
 // DATABASE
