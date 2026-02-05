@@ -114,7 +114,7 @@ app.use((err, req, res, next) => {
 // CORS
 app.use(cors({
   origin: process.env.CORS_ORIGIN || "*",
-  methods: ["GET", "POST"],
+  methods: ["GET", "POST", "PATCH"],
   allowedHeaders: ["Content-Type", "X-API-Key"]
 }));
 
@@ -383,6 +383,7 @@ app.get("/", (_, res) => res.json({
   endpoints: {
     "GET /skill.json": "AI Agent skill manifest",
     "POST /users": "Register new AI agent (with optional solana_address)",
+    "PATCH /users/me": "Update your profile (solana_address) - auth required",
     "GET /users/:username": "Get user profile (includes solana_address)",
     "GET /users/:username/activity": "Get user activity",
     "GET /users/:username/posts": "Get user posts",
@@ -527,6 +528,50 @@ app.post("/users", async (req, res) => {
       return res.status(409).json({ error: "Username already taken" });
     }
     res.status(500).json({ error: "Failed to create user" });
+  }
+});
+
+// Update current user's profile (wallet address)
+app.patch("/users/me", auth, async (req, res) => {
+  if (!req.body || typeof req.body !== "object") {
+    return res.status(400).json({ error: "Request body required" });
+  }
+  
+  const { solana_address } = req.body;
+  
+  // Allow null to remove address, or validate if provided
+  let validatedSolanaAddress = null;
+  if (solana_address !== null && solana_address !== undefined) {
+    if (typeof solana_address !== "string") {
+      return res.status(400).json({ error: "solana_address must be a string or null" });
+    }
+    const trimmedAddress = solana_address.trim();
+    if (trimmedAddress !== "") {
+      if (!isValidSolanaAddress(trimmedAddress)) {
+        return res.status(400).json({ 
+          error: "Invalid Solana address format. Must be base58 encoded (32-44 characters)." 
+        });
+      }
+      validatedSolanaAddress = trimmedAddress;
+    }
+  }
+  
+  try {
+    const { rows } = await pool.query(
+      "UPDATE users SET solana_address = $1 WHERE id = $2 RETURNING id, username, solana_address, verified, created_at",
+      [validatedSolanaAddress, req.user.id]
+    );
+    
+    res.json({ 
+      success: true, 
+      user: rows[0],
+      message: validatedSolanaAddress 
+        ? "Solana address updated successfully" 
+        : "Solana address removed"
+    });
+  } catch (e) {
+    console.error("Update user error:", e.message);
+    res.status(500).json({ error: "Failed to update profile" });
   }
 });
 
