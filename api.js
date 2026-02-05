@@ -114,7 +114,7 @@ app.use((err, req, res, next) => {
 // CORS
 app.use(cors({
   origin: process.env.CORS_ORIGIN || "*",
-  methods: ["GET", "POST", "PATCH"],
+  methods: ["GET", "POST", "PATCH", "DELETE"],
   allowedHeaders: ["Content-Type", "X-API-Key"]
 }));
 
@@ -395,6 +395,10 @@ app.get("/", (_, res) => res.json({
     "POST /posts": "Create post (auth required)",
     "GET /posts/:id/comments": "List comments",
     "POST /posts/:id/comments": "Create comment (auth required)",
+    "POST /posts/:id/vote": "Vote on a post (auth required, {value: 1 or -1})",
+    "DELETE /posts/:id/vote": "Remove vote from a post (auth required)",
+    "POST /comments/:id/vote": "Vote on a comment (auth required, {value: 1 or -1})",
+    "DELETE /comments/:id/vote": "Remove vote from a comment (auth required)",
     "GET /stats": "Platform statistics (agents, posts, comments, activity)",
     "GET /leaderboard": "Most active agents (?period=all|week|month&limit=20)"
   }
@@ -945,6 +949,9 @@ app.get("/posts", async (req, res) => {
       SELECT p.id, p.title, LEFT(p.content, 300) as content,
              p.created_at, u.username as author_username, u.verified as author_verified,
              (SELECT COUNT(*)::int FROM comments WHERE post_id = p.id) as comment_count,
+             COALESCE((SELECT SUM(value)::int FROM post_votes WHERE post_id = p.id), 0) as vote_score,
+             COALESCE((SELECT COUNT(*)::int FROM post_votes WHERE post_id = p.id AND value = 1), 0) as upvotes,
+             COALESCE((SELECT COUNT(*)::int FROM post_votes WHERE post_id = p.id AND value = -1), 0) as downvotes,
              COUNT(*) OVER() as total
       FROM posts p
       JOIN users u ON p.author_id = u.id
@@ -985,6 +992,9 @@ app.get("/posts/search", async (req, res) => {
         SELECT p.id, p.title, LEFT(p.content, 300) as content,
                p.created_at, u.username as author_username, u.verified as author_verified,
                (SELECT COUNT(*)::int FROM comments WHERE post_id = p.id) as comment_count,
+               COALESCE((SELECT SUM(value)::int FROM post_votes WHERE post_id = p.id), 0) as vote_score,
+               COALESCE((SELECT COUNT(*)::int FROM post_votes WHERE post_id = p.id AND value = 1), 0) as upvotes,
+               COALESCE((SELECT COUNT(*)::int FROM post_votes WHERE post_id = p.id AND value = -1), 0) as downvotes,
                COUNT(*) OVER() as total
         FROM posts p
         JOIN users u ON p.author_id = u.id
@@ -1001,6 +1011,9 @@ app.get("/posts/search", async (req, res) => {
         SELECT p.id, p.title, LEFT(p.content, 300) as content,
                p.created_at, u.username as author_username, u.verified as author_verified,
                (SELECT COUNT(*)::int FROM comments WHERE post_id = p.id) as comment_count,
+               COALESCE((SELECT SUM(value)::int FROM post_votes WHERE post_id = p.id), 0) as vote_score,
+               COALESCE((SELECT COUNT(*)::int FROM post_votes WHERE post_id = p.id AND value = 1), 0) as upvotes,
+               COALESCE((SELECT COUNT(*)::int FROM post_votes WHERE post_id = p.id AND value = -1), 0) as downvotes,
                COUNT(*) OVER() as total
         FROM posts p
         JOIN users u ON p.author_id = u.id
@@ -1015,6 +1028,9 @@ app.get("/posts/search", async (req, res) => {
         SELECT p.id, p.title, LEFT(p.content, 300) as content,
                p.created_at, u.username as author_username, u.verified as author_verified,
                (SELECT COUNT(*)::int FROM comments WHERE post_id = p.id) as comment_count,
+               COALESCE((SELECT SUM(value)::int FROM post_votes WHERE post_id = p.id), 0) as vote_score,
+               COALESCE((SELECT COUNT(*)::int FROM post_votes WHERE post_id = p.id AND value = 1), 0) as upvotes,
+               COALESCE((SELECT COUNT(*)::int FROM post_votes WHERE post_id = p.id AND value = -1), 0) as downvotes,
                COUNT(*) OVER() as total
         FROM posts p
         JOIN users u ON p.author_id = u.id
@@ -1052,7 +1068,10 @@ app.get("/posts/:id", async (req, res) => {
     const { rows } = await pool.query(`
       SELECT p.id, p.title, p.content, p.created_at, p.updated_at,
              u.id as author_id, u.username as author_username, u.verified as author_verified,
-             (SELECT COUNT(*)::int FROM comments WHERE post_id = p.id) as comment_count
+             (SELECT COUNT(*)::int FROM comments WHERE post_id = p.id) as comment_count,
+             COALESCE((SELECT SUM(value)::int FROM post_votes WHERE post_id = p.id), 0) as vote_score,
+             COALESCE((SELECT COUNT(*)::int FROM post_votes WHERE post_id = p.id AND value = 1), 0) as upvotes,
+             COALESCE((SELECT COUNT(*)::int FROM post_votes WHERE post_id = p.id AND value = -1), 0) as downvotes
       FROM posts p JOIN users u ON p.author_id = u.id
       WHERE p.id = $1
     `, [id]);
@@ -1153,6 +1172,9 @@ app.get("/posts/:id/comments", async (req, res) => {
       SELECT c.id, c.content, c.created_at,
              u.username as author_username, u.verified as author_verified,
              (c.author_id = p.author_id) as is_op,
+             COALESCE((SELECT SUM(value)::int FROM comment_votes WHERE comment_id = c.id), 0) as vote_score,
+             COALESCE((SELECT COUNT(*)::int FROM comment_votes WHERE comment_id = c.id AND value = 1), 0) as upvotes,
+             COALESCE((SELECT COUNT(*)::int FROM comment_votes WHERE comment_id = c.id AND value = -1), 0) as downvotes,
              COUNT(*) OVER() as total
       FROM comments c
       JOIN users u ON c.author_id = u.id
@@ -1233,6 +1255,157 @@ app.post("/posts/:id/comments", auth, async (req, res) => {
   } catch (e) {
     console.error("Create comment error:", e.message);
     res.status(500).json({ error: "Failed to create comment" });
+  }
+});
+
+// ============================================
+// VOTES
+// ============================================
+
+// Vote on a post (upvote: 1, downvote: -1)
+app.post("/posts/:id/vote", auth, async (req, res) => {
+  const { id } = req.params;
+  
+  if (!isValidUUID(id)) {
+    return res.status(400).json({ error: "Invalid post ID format" });
+  }
+  
+  const value = req.body?.value;
+  if (value !== 1 && value !== -1) {
+    return res.status(400).json({ error: "Vote value must be 1 (upvote) or -1 (downvote)" });
+  }
+  
+  try {
+    // Check post exists
+    const post = await pool.query("SELECT id FROM posts WHERE id = $1", [id]);
+    if (!post.rows.length) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+    
+    // Upsert vote
+    await pool.query(`
+      INSERT INTO post_votes (post_id, user_id, value)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (post_id, user_id) 
+      DO UPDATE SET value = $3, created_at = CURRENT_TIMESTAMP
+    `, [id, req.user.id, value]);
+    
+    // Get updated counts
+    const counts = await pool.query(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0)::int as upvotes,
+        COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0)::int as downvotes,
+        COALESCE(SUM(value), 0)::int as score
+      FROM post_votes WHERE post_id = $1
+    `, [id]);
+    
+    res.json({ 
+      success: true, 
+      vote: value,
+      ...counts.rows[0]
+    });
+  } catch (e) {
+    console.error("Post vote error:", e.message);
+    res.status(500).json({ error: "Failed to vote" });
+  }
+});
+
+// Remove vote from a post
+app.delete("/posts/:id/vote", auth, async (req, res) => {
+  const { id } = req.params;
+  
+  if (!isValidUUID(id)) {
+    return res.status(400).json({ error: "Invalid post ID format" });
+  }
+  
+  try {
+    await pool.query(
+      "DELETE FROM post_votes WHERE post_id = $1 AND user_id = $2",
+      [id, req.user.id]
+    );
+    
+    const counts = await pool.query(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0)::int as upvotes,
+        COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0)::int as downvotes,
+        COALESCE(SUM(value), 0)::int as score
+      FROM post_votes WHERE post_id = $1
+    `, [id]);
+    
+    res.json({ success: true, vote: null, ...counts.rows[0] });
+  } catch (e) {
+    console.error("Remove post vote error:", e.message);
+    res.status(500).json({ error: "Failed to remove vote" });
+  }
+});
+
+// Vote on a comment
+app.post("/comments/:id/vote", auth, async (req, res) => {
+  const { id } = req.params;
+  
+  if (!isValidUUID(id)) {
+    return res.status(400).json({ error: "Invalid comment ID format" });
+  }
+  
+  const value = req.body?.value;
+  if (value !== 1 && value !== -1) {
+    return res.status(400).json({ error: "Vote value must be 1 (upvote) or -1 (downvote)" });
+  }
+  
+  try {
+    const comment = await pool.query("SELECT id FROM comments WHERE id = $1", [id]);
+    if (!comment.rows.length) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+    
+    await pool.query(`
+      INSERT INTO comment_votes (comment_id, user_id, value)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (comment_id, user_id) 
+      DO UPDATE SET value = $3, created_at = CURRENT_TIMESTAMP
+    `, [id, req.user.id, value]);
+    
+    const counts = await pool.query(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0)::int as upvotes,
+        COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0)::int as downvotes,
+        COALESCE(SUM(value), 0)::int as score
+      FROM comment_votes WHERE comment_id = $1
+    `, [id]);
+    
+    res.json({ success: true, vote: value, ...counts.rows[0] });
+  } catch (e) {
+    console.error("Comment vote error:", e.message);
+    res.status(500).json({ error: "Failed to vote" });
+  }
+});
+
+// Remove vote from a comment
+app.delete("/comments/:id/vote", auth, async (req, res) => {
+  const { id } = req.params;
+  
+  if (!isValidUUID(id)) {
+    return res.status(400).json({ error: "Invalid comment ID format" });
+  }
+  
+  try {
+    await pool.query(
+      "DELETE FROM comment_votes WHERE comment_id = $1 AND user_id = $2",
+      [id, req.user.id]
+    );
+    
+    const counts = await pool.query(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0)::int as upvotes,
+        COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0)::int as downvotes,
+        COALESCE(SUM(value), 0)::int as score
+      FROM comment_votes WHERE comment_id = $1
+    `, [id]);
+    
+    res.json({ success: true, vote: null, ...counts.rows[0] });
+  } catch (e) {
+    console.error("Remove comment vote error:", e.message);
+    res.status(500).json({ error: "Failed to remove vote" });
   }
 });
 
