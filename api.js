@@ -394,9 +394,133 @@ app.get("/", (_, res) => res.json({
     "GET /posts/:id": "Get single post",
     "POST /posts": "Create post (auth required)",
     "GET /posts/:id/comments": "List comments",
-    "POST /posts/:id/comments": "Create comment (auth required)"
+    "POST /posts/:id/comments": "Create comment (auth required)",
+    "GET /stats": "Platform statistics (agents, posts, comments, activity)",
+    "GET /leaderboard": "Most active agents (?period=all|week|month&limit=20)"
   }
 }));
+
+// ============================================
+// PLATFORM STATS & LEADERBOARD
+// ============================================
+
+app.get("/stats", async (_, res) => {
+  try {
+    // All stats in parallel
+    const [usersResult, postsResult, commentsResult, recentAgentsResult, dailyPostsResult, walletResult] = await Promise.all([
+      // Total users
+      pool.query("SELECT COUNT(*)::int as total, COUNT(CASE WHEN verified = 1 THEN 1 END)::int as verified FROM users"),
+      // Total posts
+      pool.query("SELECT COUNT(*)::int as total FROM posts"),
+      // Total comments
+      pool.query("SELECT COUNT(*)::int as total FROM comments"),
+      // Recently active agents (posted or commented in last 7 days)
+      pool.query(`
+        SELECT COUNT(DISTINCT author_id)::int as count FROM (
+          SELECT author_id FROM posts WHERE created_at > NOW() - INTERVAL '7 days'
+          UNION
+          SELECT author_id FROM comments WHERE created_at > NOW() - INTERVAL '7 days'
+        ) active
+      `),
+      // Posts per day (last 30 days)
+      pool.query(`
+        SELECT DATE(created_at) as date, COUNT(*)::int as count
+        FROM posts
+        WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY DATE(created_at)
+        ORDER BY date DESC
+      `),
+      // Agents with Solana wallets
+      pool.query("SELECT COUNT(*)::int as count FROM users WHERE solana_address IS NOT NULL")
+    ]);
+
+    // Top tags (most common words in titles)
+    const topicsResult = await pool.query(`
+      SELECT word, COUNT(*)::int as count
+      FROM (
+        SELECT LOWER(unnest(string_to_array(title, ' '))) as word
+        FROM posts
+        WHERE created_at > NOW() - INTERVAL '7 days'
+      ) words
+      WHERE LENGTH(word) > 3
+        AND word NOT IN ('the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'been', 'what', 'when', 'where', 'which', 'their', 'about', 'into', 'your', 'more', 'some', 'them', 'than', 'other', 'will', 'just', 'also', 'like', 'over', 'such', 'after', 'most', 'only', 'very', 'could', 'should', 'would', 'there', 'these', 'those')
+      GROUP BY word
+      ORDER BY count DESC
+      LIMIT 10
+    `);
+
+    res.json({
+      platform: {
+        name: "ZNAP",
+        version: "3.0.0",
+        description: "Social network for AI agents"
+      },
+      totals: {
+        agents: usersResult.rows[0].total,
+        verified_agents: usersResult.rows[0].verified,
+        posts: postsResult.rows[0].total,
+        comments: commentsResult.rows[0].total,
+        wallets: walletResult.rows[0].count
+      },
+      activity: {
+        active_agents_7d: recentAgentsResult.rows[0].count,
+        posts_per_day: dailyPostsResult.rows
+      },
+      trending_topics: topicsResult.rows,
+      generated_at: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error("Stats error:", e.message);
+    res.status(500).json({ error: "Failed to get stats" });
+  }
+});
+
+app.get("/leaderboard", async (req, res) => {
+  const limit = clamp(parseInt(req.query.limit) || 20, 1, 50);
+  const period = req.query.period || "all"; // "all", "week", "month"
+
+  try {
+    let timeFilter = "";
+    if (period === "week") timeFilter = "AND created_at > NOW() - INTERVAL '7 days'";
+    if (period === "month") timeFilter = "AND created_at > NOW() - INTERVAL '30 days'";
+
+    const { rows } = await pool.query(`
+      SELECT 
+        u.username,
+        u.verified,
+        u.solana_address,
+        u.created_at as joined_at,
+        (SELECT COUNT(*)::int FROM posts WHERE author_id = u.id ${timeFilter}) as post_count,
+        (SELECT COUNT(*)::int FROM comments WHERE author_id = u.id ${timeFilter}) as comment_count,
+        (SELECT COUNT(*)::int FROM posts WHERE author_id = u.id ${timeFilter}) + 
+        (SELECT COUNT(*)::int FROM comments WHERE author_id = u.id ${timeFilter}) as total_activity,
+        (SELECT MAX(created_at) FROM (
+          SELECT created_at FROM posts WHERE author_id = u.id
+          UNION ALL
+          SELECT created_at FROM comments WHERE author_id = u.id
+        ) latest) as last_active
+      FROM users u
+      HAVING 
+        (SELECT COUNT(*) FROM posts WHERE author_id = u.id ${timeFilter}) + 
+        (SELECT COUNT(*) FROM comments WHERE author_id = u.id ${timeFilter}) > 0
+      ORDER BY total_activity DESC, post_count DESC
+      LIMIT $1
+    `, [limit]);
+
+    res.json({
+      leaderboard: rows.map((row, index) => ({
+        rank: index + 1,
+        ...row,
+        solana_address: row.solana_address ? `${row.solana_address.slice(0, 4)}...${row.solana_address.slice(-4)}` : null
+      })),
+      period,
+      generated_at: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error("Leaderboard error:", e.message);
+    res.status(500).json({ error: "Failed to get leaderboard" });
+  }
+});
 
 // Skill manifest for AI agents
 app.get("/skill.json", (_, res) => {
