@@ -390,6 +390,7 @@ app.get("/", (_, res) => res.json({
     "GET /users/:username/comments": "Get user comments",
     "POST /users/verify-proof": "Submit verification proof (auth required)",
     "GET /posts": "List posts (paginated)",
+    "GET /posts/search": "Search posts (?q=keyword&author=username)",
     "GET /posts/:id": "Get single post",
     "POST /posts": "Create post (auth required)",
     "GET /posts/:id/comments": "List comments",
@@ -836,6 +837,83 @@ app.get("/posts", async (req, res) => {
   } catch (e) {
     console.error("Get posts error:", e.message);
     res.status(500).json({ error: "Failed to get posts" });
+  }
+});
+
+// Search posts
+app.get("/posts/search", async (req, res) => {
+  const { q, author } = req.query;
+  const page = clamp(parseInt(req.query.page) || 1, 1, 1000);
+  const limit = clamp(parseInt(req.query.limit) || 10, 1, 50);
+  const offset = (page - 1) * limit;
+
+  if (!q && !author) {
+    return res.status(400).json({ error: "Search query (q) or author parameter required" });
+  }
+
+  try {
+    let query, params;
+
+    if (q && author) {
+      // Search by keyword + author
+      const searchTerm = `%${q.trim().toLowerCase()}%`;
+      query = `
+        SELECT p.id, p.title, LEFT(p.content, 300) as content,
+               p.created_at, u.username as author_username, u.verified as author_verified,
+               (SELECT COUNT(*)::int FROM comments WHERE post_id = p.id) as comment_count,
+               COUNT(*) OVER() as total
+        FROM posts p
+        JOIN users u ON p.author_id = u.id
+        WHERE (LOWER(p.title) LIKE $1 OR LOWER(p.content) LIKE $1)
+          AND LOWER(u.username) = LOWER($2)
+        ORDER BY p.created_at DESC
+        LIMIT $3 OFFSET $4
+      `;
+      params = [searchTerm, author.trim(), limit, offset];
+    } else if (q) {
+      // Search by keyword only
+      const searchTerm = `%${q.trim().toLowerCase()}%`;
+      query = `
+        SELECT p.id, p.title, LEFT(p.content, 300) as content,
+               p.created_at, u.username as author_username, u.verified as author_verified,
+               (SELECT COUNT(*)::int FROM comments WHERE post_id = p.id) as comment_count,
+               COUNT(*) OVER() as total
+        FROM posts p
+        JOIN users u ON p.author_id = u.id
+        WHERE LOWER(p.title) LIKE $1 OR LOWER(p.content) LIKE $1
+        ORDER BY p.created_at DESC
+        LIMIT $2 OFFSET $3
+      `;
+      params = [searchTerm, limit, offset];
+    } else {
+      // Search by author only
+      query = `
+        SELECT p.id, p.title, LEFT(p.content, 300) as content,
+               p.created_at, u.username as author_username, u.verified as author_verified,
+               (SELECT COUNT(*)::int FROM comments WHERE post_id = p.id) as comment_count,
+               COUNT(*) OVER() as total
+        FROM posts p
+        JOIN users u ON p.author_id = u.id
+        WHERE LOWER(u.username) = LOWER($1)
+        ORDER BY p.created_at DESC
+        LIMIT $2 OFFSET $3
+      `;
+      params = [author.trim(), limit, offset];
+    }
+
+    const { rows } = await pool.query(query, params);
+
+    const total = rows[0]?.total || 0;
+    res.json({
+      items: rows.map(({ total, ...r }) => r),
+      total, page, limit,
+      total_pages: Math.ceil(total / limit) || 0,
+      query: q || null,
+      author: author || null
+    });
+  } catch (e) {
+    console.error("Search posts error:", e.message);
+    res.status(500).json({ error: "Search failed" });
   }
 });
 
