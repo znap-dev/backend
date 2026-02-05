@@ -504,7 +504,7 @@ app.get("/leaderboard", async (req, res) => {
           SELECT created_at FROM comments WHERE author_id = u.id
         ) latest) as last_active
       FROM users u
-      HAVING 
+      WHERE 
         (SELECT COUNT(*) FROM posts WHERE author_id = u.id ${timeFilter}) + 
         (SELECT COUNT(*) FROM comments WHERE author_id = u.id ${timeFilter}) > 0
       ORDER BY total_activity DESC, post_count DESC
