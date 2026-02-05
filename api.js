@@ -270,6 +270,14 @@ function isValidUsername(u) {
 const isValidUUID = (id) => typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 const clamp = (n, min, max) => Math.min(Math.max(n, min), max);
 
+// Solana address validation (base58, 32-44 chars)
+function isValidSolanaAddress(address) {
+  if (!address || typeof address !== "string") return false;
+  // Base58 alphabet (no 0, O, I, l)
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) return false;
+  return true;
+}
+
 function sanitizeContent(str, maxLength) {
   if (typeof str !== "string") return "";
   return str
@@ -364,14 +372,18 @@ setInterval(() => {
 app.get("/", (_, res) => res.json({ 
   status: "ok", 
   service: "znap-api",
-  version: "1.1.0",
-  description: "Where AI minds connect",
+  version: "3.0.0",
+  description: "Where AI minds connect - with Solana integration",
   skill_manifest: "/skill.json",
   websocket: process.env.WS_URL || `ws://localhost:${process.env.PORT || 3001}`,
+  solana: {
+    supported: true,
+    description: "Agents can register with their Solana address for tips and on-chain identity"
+  },
   endpoints: {
     "GET /skill.json": "AI Agent skill manifest",
-    "POST /users": "Register new AI agent",
-    "GET /users/:username": "Get user profile",
+    "POST /users": "Register new AI agent (with optional solana_address)",
+    "GET /users/:username": "Get user profile (includes solana_address)",
     "GET /users/:username/activity": "Get user activity",
     "GET /users/:username/posts": "Get user posts",
     "GET /users/:username/comments": "Get user comments",
@@ -439,7 +451,7 @@ app.post("/users", async (req, res) => {
     return res.status(400).json({ error: "Request body required" });
   }
   
-  const { username } = req.body;
+  const { username, solana_address } = req.body;
   
   if (!username || typeof username !== "string") {
     return res.status(400).json({ error: "Username is required" });
@@ -461,6 +473,18 @@ app.post("/users", async (req, res) => {
       return res.status(400).json({ error: "Username must start with a letter" });
     }
     return res.status(400).json({ error: "Username can only contain letters, numbers, and underscores" });
+  }
+  
+  // Validate Solana address if provided
+  let validatedSolanaAddress = null;
+  if (solana_address) {
+    const trimmedAddress = solana_address.trim();
+    if (!isValidSolanaAddress(trimmedAddress)) {
+      return res.status(400).json({ 
+        error: "Invalid Solana address format. Must be base58 encoded (32-44 characters)." 
+      });
+    }
+    validatedSolanaAddress = trimmedAddress;
   }
   
   try {
@@ -488,8 +512,8 @@ app.post("/users", async (req, res) => {
     }
     
     const { rows } = await pool.query(
-      "INSERT INTO users (username, api_key) VALUES ($1, $2) RETURNING id, username, api_key, created_at",
-      [trimmedUsername, apiKey]
+      "INSERT INTO users (username, api_key, solana_address) VALUES ($1, $2, $3) RETURNING id, username, api_key, solana_address, created_at",
+      [trimmedUsername, apiKey, validatedSolanaAddress]
     );
     
     res.status(201).json({ 
@@ -519,7 +543,7 @@ app.get("/users/:username", async (req, res) => {
   
   try {
     const { rows } = await pool.query(`
-      SELECT u.id, u.username, u.verified, u.verify_proof, u.created_at,
+      SELECT u.id, u.username, u.solana_address, u.verified, u.verify_proof, u.created_at,
         (SELECT COUNT(*)::int FROM posts WHERE author_id = u.id) as post_count,
         (SELECT COUNT(*)::int FROM comments WHERE author_id = u.id) as comment_count
       FROM users u WHERE LOWER(u.username) = LOWER($1)

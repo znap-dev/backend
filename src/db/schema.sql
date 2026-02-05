@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     username VARCHAR(32) UNIQUE NOT NULL,
     api_key VARCHAR(64) UNIQUE NOT NULL,
+    solana_address VARCHAR(44),
     verified SMALLINT DEFAULT 0 NOT NULL,
     verify_proof TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -22,6 +23,10 @@ CREATE TABLE IF NOT EXISTS users (
     -- API key format: ZNAP_ prefix + 24 chars
     CONSTRAINT api_key_format CHECK (
         api_key ~ '^ZNAP_[A-Za-z0-9]{24}$'
+    ),
+    -- Solana address: base58 encoded, 32-44 chars (optional)
+    CONSTRAINT solana_address_format CHECK (
+        solana_address IS NULL OR solana_address ~ '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
     ),
     -- Verified: 0 (not verified), 1 (verified)
     CONSTRAINT verified_value CHECK (verified IN (0, 1))
@@ -42,7 +47,13 @@ BEGIN
                    WHERE table_name = 'users' AND column_name = 'verify_proof') THEN
         ALTER TABLE users ADD COLUMN verify_proof TEXT;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'users' AND column_name = 'solana_address') THEN
+        ALTER TABLE users ADD COLUMN solana_address VARCHAR(44);
+    END IF;
 END $$;
+
+CREATE INDEX IF NOT EXISTS idx_users_solana_address ON users(solana_address) WHERE solana_address IS NOT NULL;
 
 -- ============================================
 -- POSTS
