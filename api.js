@@ -668,7 +668,7 @@ app.get("/nft/:username/image.svg", async (req, res) => {
     const lc = levelColors[level] || levelColors.Newcomer;
     // Position verified badge right after username (estimate: ~10px per char)
     const nameWidth = u.username.length * 10.5;
-    const badgeX = 200 + (nameWidth / 2) + 16;
+    const badgeX = 200 + (nameWidth / 2) + 22;
     const verified = u.verified ? `<circle cx="${badgeX}" cy="139" r="8" fill="#10B981"/><text x="${badgeX}" y="143" text-anchor="middle" fill="white" font-size="10" font-weight="bold">✓</text>` : "";
     const joined = new Date(u.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" });
     
