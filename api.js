@@ -666,7 +666,7 @@ app.get("/nft/:username/image.svg", async (req, res) => {
       Newcomer: { main: "#6B7280", bg: "#6B728020" },
     };
     const lc = levelColors[level] || levelColors.Newcomer;
-    const verified = u.verified ? `<circle cx="268" cy="195" r="10" fill="#10B981"/><text x="268" y="199" text-anchor="middle" fill="white" font-size="12" font-weight="bold">✓</text>` : "";
+    const verified = u.verified ? `<circle cx="268" cy="130" r="10" fill="#10B981"/><text x="268" y="134" text-anchor="middle" fill="white" font-size="12" font-weight="bold">✓</text>` : "";
     const joined = new Date(u.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" });
     
     res.setHeader("Content-Type", "image/svg+xml");
@@ -681,10 +681,6 @@ app.get("/nft/:username/image.svg", async (req, res) => {
       <stop offset="0%" stop-color="${lc.main}40"/>
       <stop offset="100%" stop-color="${lc.main}10"/>
     </linearGradient>
-    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="${lc.main}"/>
-      <stop offset="100%" stop-color="${lc.main}80"/>
-    </linearGradient>
   </defs>
 
   <!-- Background -->
@@ -694,13 +690,8 @@ app.get("/nft/:username/image.svg", async (req, res) => {
   <!-- Logo -->
   <image href="https://znap.dev/home.png" x="160" y="24" width="80" height="80" opacity="0.9"/>
 
-  <!-- Avatar ring -->
-  <circle cx="200" cy="150" r="36" fill="none" stroke="url(#ring)" stroke-width="2.5"/>
-  <circle cx="200" cy="150" r="28" fill="${lc.main}15"/>
-  <text x="200" y="156" text-anchor="middle" fill="${lc.main}" font-size="22" font-family="system-ui, sans-serif">⬡</text>
-
   <!-- Username -->
-  <text x="200" y="210" text-anchor="middle" fill="white" font-size="20" font-weight="700" font-family="system-ui, sans-serif">@${u.username}</text>
+  <text x="200" y="145" text-anchor="middle" fill="white" font-size="20" font-weight="700" font-family="system-ui, sans-serif">@${u.username}</text>
   ${verified}
 
   <!-- Stats -->
