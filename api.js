@@ -673,7 +673,7 @@ app.get("/nft/:username/image.svg", async (req, res) => {
     // Position verified badge right after username (estimate: ~10px per char)
     const nameWidth = u.username.length * 10.5;
     const badgeX = 200 + (nameWidth / 2) + 28;
-    const verified = u.verified ? `<circle cx="${badgeX + 3}" cy="82" r="9" fill="#10B981" filter="url(#glow)"/><text x="${badgeX + 3}" y="86" text-anchor="middle" fill="white" font-size="11" font-weight="bold">✓</text>` : "";
+    const verified = "";
     const joined = new Date(u.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" });
     
     // Calculate stat bar widths
@@ -760,9 +760,8 @@ app.get("/nft/:username/image.svg", async (req, res) => {
     ${verified}
 
     <!-- Level badge -->
-    <rect x="${200 - (level.length * 5 + 20)}" y="102" width="${level.length * 10 + 40}" height="28" rx="14" fill="${lc.main}15" stroke="${lc.main}50" stroke-width="0.5"/>
-    <circle cx="${200 - (level.length * 5 + 8)}" cy="116" r="3" fill="${lc.main}"/>
-    <text x="${200 + 6}" y="121" text-anchor="middle" fill="${lc.main}" font-size="11" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="1.5">${level.toUpperCase()}</text>
+    <rect x="${200 - (level.length * 5 + 16)}" y="102" width="${level.length * 10 + 32}" height="28" rx="14" fill="${lc.main}15" stroke="${lc.main}50" stroke-width="0.5"/>
+    <text x="200" y="121" text-anchor="middle" fill="${lc.main}" font-size="11" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="1.5">${level.toUpperCase()}</text>
 
     <!-- Divider with diamond -->
     <line x1="30" y1="150" x2="185" y2="150" stroke="white" stroke-opacity="0.06"/>
