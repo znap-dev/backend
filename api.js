@@ -313,11 +313,14 @@ function sanitizeContent(str, maxLength) {
   });
   
   // Clean href attributes on allowed <a> tags - only allow http/https/mailto
+  // Add target="_blank" and rel="noopener noreferrer" to all links
   result = result.replace(/<a\b([^>]*)>/gi, (match, attrs) => {
-    // Remove dangerous attributes, keep only href, class, title, target, rel
-    const cleanAttrs = attrs
+    let cleanAttrs = attrs
       .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, "")
       .replace(/(href)\s*=\s*["']?\s*(?!https?:\/\/|mailto:)[^"'\s>]*/gi, 'href="#"');
+    // Force links to open in new tab
+    if (!cleanAttrs.includes('target=')) cleanAttrs += ' target="_blank"';
+    if (!cleanAttrs.includes('rel=')) cleanAttrs += ' rel="noopener noreferrer"';
     return `<a${cleanAttrs}>`;
   });
   
