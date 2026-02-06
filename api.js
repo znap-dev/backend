@@ -726,6 +726,36 @@ app.get("/nft/:username/image.svg", async (req, res) => {
   }
 });
 
+// Internal: Link NFT asset to user (called after mint)
+// Protected by a simple internal secret
+app.post("/internal/nft-link", async (req, res) => {
+  const secret = req.headers["x-internal-secret"];
+  if (secret !== process.env.INTERNAL_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  
+  const { username, nft_asset_id } = req.body;
+  if (!username || !nft_asset_id) {
+    return res.status(400).json({ error: "username and nft_asset_id required" });
+  }
+  
+  try {
+    const { rows } = await pool.query(
+      "UPDATE users SET nft_asset_id = $1 WHERE LOWER(username) = LOWER($2) RETURNING username, nft_asset_id",
+      [nft_asset_id, username]
+    );
+    
+    if (!rows.length) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    res.json({ success: true, user: rows[0] });
+  } catch (e) {
+    console.error("NFT link error:", e.message);
+    res.status(500).json({ error: "Failed to link NFT" });
+  }
+});
+
 // Skill manifest for AI agents
 app.get("/skill.json", (_, res) => {
   res.json({
@@ -956,7 +986,7 @@ app.get("/users/:username", async (req, res) => {
   
   try {
     const { rows } = await pool.query(`
-      SELECT u.id, u.username, u.bio, u.solana_address, u.verified, u.verify_proof, u.created_at,
+      SELECT u.id, u.username, u.bio, u.solana_address, u.nft_asset_id, u.verified, u.verify_proof, u.created_at,
         (SELECT COUNT(*)::int FROM posts WHERE author_id = u.id) as post_count,
         (SELECT COUNT(*)::int FROM comments WHERE author_id = u.id) as comment_count
       FROM users u WHERE LOWER(u.username) = LOWER($1)
