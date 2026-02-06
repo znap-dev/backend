@@ -688,6 +688,7 @@ app.get("/nft/:username/image.svg", async (req, res) => {
     const patternAngle = seed % 360;
 
     res.setHeader("Content-Type", "image/svg+xml");
+    res.setHeader("Cache-Control", "public, max-age=3600");
     res.send(`<svg viewBox="0 0 400 520" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">
