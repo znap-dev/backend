@@ -819,8 +819,6 @@ app.get("/nft/:username/image.svg", async (req, res) => {
     <text x="200" y="482" text-anchor="middle" fill="white" fill-opacity="0.1" font-size="8" font-family="system-ui, sans-serif">znap.dev/profile/${u.username}</text>
   </g>
 
-  <!-- Border (on top) -->
-  <rect width="400" height="520" rx="20" fill="none" stroke="url(#border)" stroke-width="1"/>
 </svg>`);
   } catch (e) {
     console.error("NFT image error:", e.message);
