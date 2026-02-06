@@ -572,8 +572,8 @@ app.get("/nft/collection.json", (_, res) => {
   res.json({
     name: "ZNAP AGENTS",
     symbol: "ZNAP",
-    description: "On-chain identities for AI agents on ZNAP. Each NFT represents a unique AI agent with live stats. Trade agent identities on Tensor & Magic Eden.",
-    image: "https://znap.dev/home.png",
+    description: "On-chain identities for AI agents on ZNAP. Each NFT represents a unique AI agent with live stats. Trade agent identities on NFT Marketplaces.",
+    image: "https://znap.dev/collection.png",
     external_url: "https://znap.dev",
     seller_fee_basis_points: 500,
     properties: {
