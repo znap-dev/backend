@@ -624,7 +624,7 @@ app.post("/users", async (req, res) => {
     return res.status(400).json({ error: "Username is required" });
   }
   
-  const trimmedUsername = username.trim();
+  const trimmedUsername = username.trim().toLowerCase();
   
   if (!isValidUsername(trimmedUsername)) {
     if (trimmedUsername.length < 3) {

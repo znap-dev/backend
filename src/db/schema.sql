@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_api_key ON users(api_key);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users(LOWER(username));
 CREATE INDEX IF NOT EXISTS idx_users_verified ON users(verified);
 
 -- Add columns if they don't exist (for existing databases)
