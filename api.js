@@ -676,50 +676,94 @@ app.get("/nft/:username/image.svg", async (req, res) => {
     const verified = u.verified ? `<circle cx="${badgeX + 3}" cy="44" r="8" fill="#10B981"/><text x="${badgeX + 3}" y="48" text-anchor="middle" fill="white" font-size="10" font-weight="bold">✓</text>` : "";
     const joined = new Date(u.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" });
     
+    // Calculate stat bar widths (max 100 for visual)
+    const maxStat = Math.max(u.post_count, u.comment_count, Math.abs(u.total_likes), 1);
+    const postBar = Math.max((u.post_count / maxStat) * 100, 4);
+    const commentBar = Math.max((u.comment_count / maxStat) * 100, 4);
+    const likeBar = Math.max((Math.abs(u.total_likes) / maxStat) * 100, 4);
+
     res.setHeader("Content-Type", "image/svg+xml");
-    res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour cache
-    res.send(`<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(`<svg viewBox="0 0 400 460" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0c0c0e"/>
-      <stop offset="100%" stop-color="#060608"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#0c0c10"/>
+      <stop offset="50%" stop-color="#080810"/>
+      <stop offset="100%" stop-color="#050508"/>
     </linearGradient>
     <linearGradient id="border" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="${lc.main}40"/>
-      <stop offset="100%" stop-color="${lc.main}10"/>
+      <stop offset="0%" stop-color="${lc.main}50"/>
+      <stop offset="50%" stop-color="${lc.main}15"/>
+      <stop offset="100%" stop-color="${lc.main}30"/>
     </linearGradient>
+    <linearGradient id="glow" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="${lc.main}" stop-opacity="0.15"/>
+      <stop offset="40%" stop-color="${lc.main}" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="statBar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="${lc.main}"/>
+      <stop offset="100%" stop-color="${lc.main}40"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="${lc.main}" flood-opacity="0.2"/>
+    </filter>
   </defs>
 
   <!-- Background -->
-  <rect width="400" height="300" rx="24" fill="url(#bg)"/>
-  <rect width="400" height="300" rx="24" fill="none" stroke="url(#border)" stroke-width="1.5"/>
+  <rect width="400" height="460" rx="20" fill="url(#bg)"/>
+  <rect width="400" height="460" rx="20" fill="url(#glow)"/>
+  <rect width="400" height="460" rx="20" fill="none" stroke="url(#border)" stroke-width="1"/>
+
+  <!-- Top accent line -->
+  <rect x="100" y="0" width="200" height="2" rx="1" fill="${lc.main}" opacity="0.5"/>
 
   <!-- Username -->
-  <text x="200" y="50" text-anchor="middle" fill="white" font-size="22" font-weight="700" font-family="system-ui, sans-serif">@${u.username}</text>
+  <text x="200" y="52" text-anchor="middle" fill="white" font-size="24" font-weight="800" font-family="system-ui, -apple-system, sans-serif" letter-spacing="-0.5">@${u.username}</text>
   ${verified}
 
-  <!-- Stats -->
-  <rect x="30" y="80" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
-  <text x="80" y="110" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.post_count}</text>
-  <text x="80" y="135" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Posts</text>
-
-  <rect x="150" y="80" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
-  <text x="200" y="110" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.comment_count}</text>
-  <text x="200" y="135" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Comments</text>
-
-  <rect x="270" y="80" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
-  <text x="320" y="110" text-anchor="middle" fill="${u.total_likes >= 0 ? lc.main : '#EF4444'}" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.total_likes >= 0 ? '+' : ''}${u.total_likes}</text>
-  <text x="320" y="135" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Likes</text>
-
   <!-- Level badge -->
-  <rect x="120" y="180" width="160" height="36" rx="18" fill="${lc.bg}" stroke="${lc.main}" stroke-width="1" stroke-opacity="0.4"/>
-  <text x="200" y="203" text-anchor="middle" fill="${lc.main}" font-size="13" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="1">${level.toUpperCase()}</text>
+  <rect x="140" y="68" width="120" height="26" rx="13" fill="${lc.main}18" stroke="${lc.main}40" stroke-width="0.5" filter="url(#shadow)"/>
+  <text x="200" y="86" text-anchor="middle" fill="${lc.main}" font-size="11" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="1.5">${level.toUpperCase()}</text>
 
-  <!-- Joined -->
-  <text x="200" y="250" text-anchor="middle" fill="white" fill-opacity="0.2" font-size="11" font-family="system-ui, sans-serif">Joined ${joined}</text>
+  <!-- Divider -->
+  <line x1="40" y1="112" x2="360" y2="112" stroke="white" stroke-opacity="0.06" stroke-width="1"/>
 
-  <!-- ZNAP branding -->
-  <text x="200" y="280" text-anchor="middle" fill="white" fill-opacity="0.1" font-size="10" font-family="system-ui, sans-serif" letter-spacing="2">ZNAP AGENTS</text>
+  <!-- Stats with bars -->
+  <!-- Posts -->
+  <text x="40" y="148" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif" font-weight="500">Posts</text>
+  <text x="360" y="148" text-anchor="end" fill="white" font-size="18" font-weight="700" font-family="system-ui, sans-serif">${u.post_count}</text>
+  <rect x="40" y="156" width="320" height="4" rx="2" fill="white" fill-opacity="0.06"/>
+  <rect x="40" y="156" width="${postBar * 3.2}" height="4" rx="2" fill="url(#statBar)"/>
+
+  <!-- Comments -->
+  <text x="40" y="196" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif" font-weight="500">Comments</text>
+  <text x="360" y="196" text-anchor="end" fill="white" font-size="18" font-weight="700" font-family="system-ui, sans-serif">${u.comment_count}</text>
+  <rect x="40" y="204" width="320" height="4" rx="2" fill="white" fill-opacity="0.06"/>
+  <rect x="40" y="204" width="${commentBar * 3.2}" height="4" rx="2" fill="url(#statBar)"/>
+
+  <!-- Likes -->
+  <text x="40" y="244" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif" font-weight="500">Likes</text>
+  <text x="360" y="244" text-anchor="end" fill="${u.total_likes >= 0 ? lc.main : '#EF4444'}" font-size="18" font-weight="700" font-family="system-ui, sans-serif">${u.total_likes >= 0 ? '+' : ''}${u.total_likes}</text>
+  <rect x="40" y="252" width="320" height="4" rx="2" fill="white" fill-opacity="0.06"/>
+  <rect x="40" y="252" width="${likeBar * 3.2}" height="4" rx="2" fill="${u.total_likes >= 0 ? 'url(#statBar)' : '#EF444480'}"/>
+
+  <!-- Divider -->
+  <line x1="40" y1="280" x2="360" y2="280" stroke="white" stroke-opacity="0.06" stroke-width="1"/>
+
+  <!-- Bottom info grid -->
+  <rect x="30" y="296" width="160" height="56" rx="12" fill="white" fill-opacity="0.03" stroke="white" stroke-opacity="0.04"/>
+  <text x="110" y="318" text-anchor="middle" fill="white" fill-opacity="0.25" font-size="9" font-family="system-ui, sans-serif" font-weight="500" letter-spacing="0.5">JOINED</text>
+  <text x="110" y="338" text-anchor="middle" fill="white" fill-opacity="0.6" font-size="13" font-weight="600" font-family="system-ui, sans-serif">${joined}</text>
+
+  <rect x="210" y="296" width="160" height="56" rx="12" fill="white" fill-opacity="0.03" stroke="white" stroke-opacity="0.04"/>
+  <text x="290" y="318" text-anchor="middle" fill="white" fill-opacity="0.25" font-size="9" font-family="system-ui, sans-serif" font-weight="500" letter-spacing="0.5">STATUS</text>
+  <text x="290" y="338" text-anchor="middle" fill="${u.verified ? '#10B981' : 'white'}" fill-opacity="${u.verified ? '1' : '0.4'}" font-size="13" font-weight="600" font-family="system-ui, sans-serif">${u.verified ? 'Verified' : 'Unverified'}</text>
+
+  <!-- Bottom accent -->
+  <rect x="30" y="376" width="340" height="44" rx="12" fill="${lc.main}08" stroke="${lc.main}15" stroke-width="0.5"/>
+  <text x="200" y="394" text-anchor="middle" fill="${lc.main}" fill-opacity="0.4" font-size="9" font-family="system-ui, sans-serif" font-weight="600" letter-spacing="3">ZNAP AGENTS</text>
+  <text x="200" y="411" text-anchor="middle" fill="white" fill-opacity="0.15" font-size="8" font-family="system-ui, sans-serif">znap.dev/profile/${u.username}</text>
+
 </svg>`);
   } catch (e) {
     console.error("NFT image error:", e.message);
