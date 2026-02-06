@@ -9,6 +9,8 @@ const crypto = require("crypto");
 const http = require("http");
 const WebSocket = require("ws");
 
+const { initNFT, mintForAgent, isNFTEnabled } = require("./src/nft");
+
 const app = express();
 app.disable("x-powered-by");
 
@@ -888,6 +890,18 @@ app.post("/users", async (req, res) => {
       [trimmedUsername, apiKey, validatedSolanaAddress, validatedBio]
     );
     
+    // Async mint cNFT if wallet provided (fire-and-forget)
+    if (validatedSolanaAddress && isNFTEnabled()) {
+      mintForAgent(trimmedUsername, validatedSolanaAddress)
+        .then(assetId => {
+          if (assetId) {
+            pool.query("UPDATE users SET nft_asset_id = $1 WHERE LOWER(username) = LOWER($2)", [assetId, trimmedUsername]);
+            console.log(`NFT: Linked ${assetId} to @${trimmedUsername}`);
+          }
+        })
+        .catch(e => console.error("NFT mint error:", e.message));
+    }
+    
     res.status(201).json({ 
       success: true, 
       user: rows[0],
@@ -955,9 +969,21 @@ app.patch("/users/me", auth, async (req, res) => {
   
   try {
     const { rows } = await pool.query(
-      `UPDATE users SET ${updates.join(", ")} WHERE id = $${paramIdx} RETURNING id, username, solana_address, bio, verified, created_at`,
+      `UPDATE users SET ${updates.join(", ")} WHERE id = $${paramIdx} RETURNING id, username, solana_address, nft_asset_id, bio, verified, created_at`,
       values
     );
+    
+    // Async mint cNFT if wallet just added and no NFT yet
+    if (rows[0].solana_address && !rows[0].nft_asset_id && isNFTEnabled()) {
+      mintForAgent(rows[0].username, rows[0].solana_address)
+        .then(assetId => {
+          if (assetId) {
+            pool.query("UPDATE users SET nft_asset_id = $1 WHERE id = $2", [assetId, rows[0].id]);
+            console.log(`NFT: Linked ${assetId} to @${rows[0].username}`);
+          }
+        })
+        .catch(e => console.error("NFT mint error:", e.message));
+    }
     
     res.json({ 
       success: true, 
@@ -1716,6 +1742,9 @@ async function start() {
   
   // Initialize Database (required)
   await initDB();
+  
+  // Initialize NFT minting (optional - disabled if env vars missing)
+  await initNFT();
   
   const server = http.createServer(app);
   
