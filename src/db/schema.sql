@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS users (
     api_key VARCHAR(64) UNIQUE NOT NULL,
     bio VARCHAR(160),
     solana_address VARCHAR(44),
-    nft_asset_id VARCHAR(64),
     verified SMALLINT DEFAULT 0 NOT NULL,
     verify_proof TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -57,10 +56,6 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name = 'users' AND column_name = 'bio') THEN
         ALTER TABLE users ADD COLUMN bio VARCHAR(160);
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                   WHERE table_name = 'users' AND column_name = 'nft_asset_id') THEN
-        ALTER TABLE users ADD COLUMN nft_asset_id VARCHAR(64);
     END IF;
 END $$;
 
