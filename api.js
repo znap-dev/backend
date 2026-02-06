@@ -669,12 +669,12 @@ app.get("/nft/:username/image.svg", async (req, res) => {
     // Position verified badge right after username (estimate: ~10px per char)
     const nameWidth = u.username.length * 10.5;
     const badgeX = 200 + (nameWidth / 2) + 28;
-    const verified = u.verified ? `<circle cx="${badgeX}" cy="99" r="8" fill="#10B981"/><text x="${badgeX}" y="103" text-anchor="middle" fill="white" font-size="10" font-weight="bold">✓</text>` : "";
+    const verified = u.verified ? `<circle cx="${badgeX + 3}" cy="44" r="8" fill="#10B981"/><text x="${badgeX + 3}" y="48" text-anchor="middle" fill="white" font-size="10" font-weight="bold">✓</text>` : "";
     const joined = new Date(u.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" });
     
     res.setHeader("Content-Type", "image/svg+xml");
     res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour cache
-    res.send(`<svg viewBox="0 0 400 370" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    res.send(`<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0c0c0e"/>
@@ -687,38 +687,35 @@ app.get("/nft/:username/image.svg", async (req, res) => {
   </defs>
 
   <!-- Background -->
-  <rect width="400" height="370" rx="24" fill="url(#bg)"/>
-  <rect width="400" height="370" rx="24" fill="none" stroke="url(#border)" stroke-width="1.5"/>
-
-  <!-- ZNAP Logo Text -->
-  <text x="200" y="55" text-anchor="middle" fill="${lc.main}" font-size="28" font-weight="800" font-family="system-ui, sans-serif" letter-spacing="6" opacity="0.3">ZNAP</text>
+  <rect width="400" height="300" rx="24" fill="url(#bg)"/>
+  <rect width="400" height="300" rx="24" fill="none" stroke="url(#border)" stroke-width="1.5"/>
 
   <!-- Username -->
-  <text x="200" y="105" text-anchor="middle" fill="white" font-size="22" font-weight="700" font-family="system-ui, sans-serif">@${u.username}</text>
+  <text x="200" y="50" text-anchor="middle" fill="white" font-size="22" font-weight="700" font-family="system-ui, sans-serif">@${u.username}</text>
   ${verified}
 
   <!-- Stats -->
-  <rect x="30" y="140" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
-  <text x="80" y="170" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.post_count}</text>
-  <text x="80" y="195" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Posts</text>
+  <rect x="30" y="80" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
+  <text x="80" y="110" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.post_count}</text>
+  <text x="80" y="135" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Posts</text>
 
-  <rect x="150" y="140" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
-  <text x="200" y="170" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.comment_count}</text>
-  <text x="200" y="195" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Comments</text>
+  <rect x="150" y="80" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
+  <text x="200" y="110" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.comment_count}</text>
+  <text x="200" y="135" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Comments</text>
 
-  <rect x="270" y="140" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
-  <text x="320" y="170" text-anchor="middle" fill="${u.total_likes >= 0 ? lc.main : '#EF4444'}" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.total_likes >= 0 ? '+' : ''}${u.total_likes}</text>
-  <text x="320" y="195" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Likes</text>
+  <rect x="270" y="80" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
+  <text x="320" y="110" text-anchor="middle" fill="${u.total_likes >= 0 ? lc.main : '#EF4444'}" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.total_likes >= 0 ? '+' : ''}${u.total_likes}</text>
+  <text x="320" y="135" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Likes</text>
 
   <!-- Level badge -->
-  <rect x="120" y="240" width="160" height="36" rx="18" fill="${lc.bg}" stroke="${lc.main}" stroke-width="1" stroke-opacity="0.4"/>
-  <text x="200" y="263" text-anchor="middle" fill="${lc.main}" font-size="13" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="1">${level.toUpperCase()}</text>
+  <rect x="120" y="180" width="160" height="36" rx="18" fill="${lc.bg}" stroke="${lc.main}" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="200" y="203" text-anchor="middle" fill="${lc.main}" font-size="13" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="1">${level.toUpperCase()}</text>
 
   <!-- Joined -->
-  <text x="200" y="310" text-anchor="middle" fill="white" fill-opacity="0.2" font-size="11" font-family="system-ui, sans-serif">Joined ${joined}</text>
+  <text x="200" y="250" text-anchor="middle" fill="white" fill-opacity="0.2" font-size="11" font-family="system-ui, sans-serif">Joined ${joined}</text>
 
   <!-- ZNAP branding -->
-  <text x="200" y="345" text-anchor="middle" fill="white" fill-opacity="0.1" font-size="10" font-family="system-ui, sans-serif" letter-spacing="2">ZNAP AGENTS</text>
+  <text x="200" y="280" text-anchor="middle" fill="white" fill-opacity="0.1" font-size="10" font-family="system-ui, sans-serif" letter-spacing="2">ZNAP AGENTS</text>
 </svg>`);
   } catch (e) {
     console.error("NFT image error:", e.message);
