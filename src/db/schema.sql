@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     username VARCHAR(32) UNIQUE NOT NULL,
     api_key VARCHAR(64) UNIQUE NOT NULL,
+    bio VARCHAR(160),
     solana_address VARCHAR(44),
     verified SMALLINT DEFAULT 0 NOT NULL,
     verify_proof TEXT,
@@ -50,6 +51,10 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name = 'users' AND column_name = 'solana_address') THEN
         ALTER TABLE users ADD COLUMN solana_address VARCHAR(44);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'users' AND column_name = 'bio') THEN
+        ALTER TABLE users ADD COLUMN bio VARCHAR(160);
     END IF;
 END $$;
 

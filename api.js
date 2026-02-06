@@ -581,7 +581,7 @@ app.post("/users", async (req, res) => {
     return res.status(400).json({ error: "Request body required" });
   }
   
-  const { username, solana_address } = req.body;
+  const { username, solana_address, bio } = req.body;
   
   if (!username || typeof username !== "string") {
     return res.status(400).json({ error: "Username is required" });
@@ -617,6 +617,21 @@ app.post("/users", async (req, res) => {
     validatedSolanaAddress = trimmedAddress;
   }
   
+  // Validate bio if provided (max 160 chars)
+  let validatedBio = null;
+  if (bio !== undefined && bio !== null) {
+    if (typeof bio !== "string") {
+      return res.status(400).json({ error: "Bio must be a string" });
+    }
+    const trimmedBio = bio.trim();
+    if (trimmedBio.length > 160) {
+      return res.status(400).json({ error: "Bio cannot exceed 160 characters" });
+    }
+    if (trimmedBio.length > 0) {
+      validatedBio = trimmedBio;
+    }
+  }
+  
   try {
     let apiKey;
     let attempts = 0;
@@ -642,8 +657,8 @@ app.post("/users", async (req, res) => {
     }
     
     const { rows } = await pool.query(
-      "INSERT INTO users (username, api_key, solana_address) VALUES ($1, $2, $3) RETURNING id, username, api_key, solana_address, created_at",
-      [trimmedUsername, apiKey, validatedSolanaAddress]
+      "INSERT INTO users (username, api_key, solana_address, bio) VALUES ($1, $2, $3, $4) RETURNING id, username, api_key, solana_address, bio, created_at",
+      [trimmedUsername, apiKey, validatedSolanaAddress, validatedBio]
     );
     
     res.status(201).json({ 
@@ -666,37 +681,61 @@ app.patch("/users/me", auth, async (req, res) => {
     return res.status(400).json({ error: "Request body required" });
   }
   
-  const { solana_address } = req.body;
+  const { solana_address, bio } = req.body;
+  const updates = [];
+  const values = [];
+  let paramIdx = 1;
   
-  // Allow null to remove address, or validate if provided
-  let validatedSolanaAddress = null;
-  if (solana_address !== null && solana_address !== undefined) {
-    if (typeof solana_address !== "string") {
-      return res.status(400).json({ error: "solana_address must be a string or null" });
-    }
-    const trimmedAddress = solana_address.trim();
-    if (trimmedAddress !== "") {
-      if (!isValidSolanaAddress(trimmedAddress)) {
-        return res.status(400).json({ 
-          error: "Invalid Solana address format. Must be base58 encoded (32-44 characters)." 
-        });
+  // Validate solana_address if provided
+  if (solana_address !== undefined) {
+    let validatedAddr = null;
+    if (solana_address !== null) {
+      if (typeof solana_address !== "string") {
+        return res.status(400).json({ error: "solana_address must be a string or null" });
       }
-      validatedSolanaAddress = trimmedAddress;
+      const trimmed = solana_address.trim();
+      if (trimmed !== "" && !isValidSolanaAddress(trimmed)) {
+        return res.status(400).json({ error: "Invalid Solana address format. Must be base58 encoded (32-44 characters)." });
+      }
+      validatedAddr = trimmed || null;
     }
+    updates.push(`solana_address = $${paramIdx++}`);
+    values.push(validatedAddr);
   }
+  
+  // Validate bio if provided
+  if (bio !== undefined) {
+    let validatedBio = null;
+    if (bio !== null) {
+      if (typeof bio !== "string") {
+        return res.status(400).json({ error: "Bio must be a string or null" });
+      }
+      const trimmed = bio.trim();
+      if (trimmed.length > 160) {
+        return res.status(400).json({ error: "Bio cannot exceed 160 characters" });
+      }
+      validatedBio = trimmed || null;
+    }
+    updates.push(`bio = $${paramIdx++}`);
+    values.push(validatedBio);
+  }
+  
+  if (updates.length === 0) {
+    return res.status(400).json({ error: "No fields to update. Provide solana_address and/or bio." });
+  }
+  
+  values.push(req.user.id);
   
   try {
     const { rows } = await pool.query(
-      "UPDATE users SET solana_address = $1 WHERE id = $2 RETURNING id, username, solana_address, verified, created_at",
-      [validatedSolanaAddress, req.user.id]
+      `UPDATE users SET ${updates.join(", ")} WHERE id = $${paramIdx} RETURNING id, username, solana_address, bio, verified, created_at`,
+      values
     );
     
     res.json({ 
       success: true, 
       user: rows[0],
-      message: validatedSolanaAddress 
-        ? "Solana address updated successfully" 
-        : "Solana address removed"
+      message: "Profile updated successfully"
     });
   } catch (e) {
     console.error("Update user error:", e.message);
@@ -717,7 +756,7 @@ app.get("/users/:username", async (req, res) => {
   
   try {
     const { rows } = await pool.query(`
-      SELECT u.id, u.username, u.solana_address, u.verified, u.verify_proof, u.created_at,
+      SELECT u.id, u.username, u.bio, u.solana_address, u.verified, u.verify_proof, u.created_at,
         (SELECT COUNT(*)::int FROM posts WHERE author_id = u.id) as post_count,
         (SELECT COUNT(*)::int FROM comments WHERE author_id = u.id) as comment_count
       FROM users u WHERE LOWER(u.username) = LOWER($1)
