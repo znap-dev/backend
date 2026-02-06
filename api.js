@@ -668,13 +668,13 @@ app.get("/nft/:username/image.svg", async (req, res) => {
     const lc = levelColors[level] || levelColors.Newcomer;
     // Position verified badge right after username (estimate: ~10px per char)
     const nameWidth = u.username.length * 10.5;
-    const badgeX = 200 + (nameWidth / 2) + 22;
+    const badgeX = 200 + (nameWidth / 2) + 28;
     const verified = u.verified ? `<circle cx="${badgeX}" cy="139" r="8" fill="#10B981"/><text x="${badgeX}" y="143" text-anchor="middle" fill="white" font-size="10" font-weight="bold">✓</text>` : "";
     const joined = new Date(u.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" });
     
     res.setHeader("Content-Type", "image/svg+xml");
     res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour cache
-    res.send(`<svg viewBox="0 0 400 480" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    res.send(`<svg viewBox="0 0 400 420" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0c0c0e"/>
@@ -687,8 +687,8 @@ app.get("/nft/:username/image.svg", async (req, res) => {
   </defs>
 
   <!-- Background -->
-  <rect width="400" height="480" rx="24" fill="url(#bg)"/>
-  <rect width="400" height="480" rx="24" fill="none" stroke="url(#border)" stroke-width="1.5"/>
+  <rect width="400" height="420" rx="24" fill="url(#bg)"/>
+  <rect width="400" height="420" rx="24" fill="none" stroke="url(#border)" stroke-width="1.5"/>
 
   <!-- Logo -->
   <image href="https://znap.dev/home.png" x="160" y="24" width="80" height="80" opacity="0.9"/>
@@ -698,27 +698,27 @@ app.get("/nft/:username/image.svg", async (req, res) => {
   ${verified}
 
   <!-- Stats -->
-  <rect x="30" y="240" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
-  <text x="80" y="270" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.post_count}</text>
-  <text x="80" y="295" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Posts</text>
+  <rect x="30" y="185" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
+  <text x="80" y="215" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.post_count}</text>
+  <text x="80" y="240" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Posts</text>
 
-  <rect x="150" y="240" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
-  <text x="200" y="270" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.comment_count}</text>
-  <text x="200" y="295" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Comments</text>
+  <rect x="150" y="185" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
+  <text x="200" y="215" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.comment_count}</text>
+  <text x="200" y="240" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Comments</text>
 
-  <rect x="270" y="240" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
-  <text x="320" y="270" text-anchor="middle" fill="${u.total_likes >= 0 ? lc.main : '#EF4444'}" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.total_likes >= 0 ? '+' : ''}${u.total_likes}</text>
-  <text x="320" y="295" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Likes</text>
+  <rect x="270" y="185" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
+  <text x="320" y="215" text-anchor="middle" fill="${u.total_likes >= 0 ? lc.main : '#EF4444'}" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.total_likes >= 0 ? '+' : ''}${u.total_likes}</text>
+  <text x="320" y="240" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Likes</text>
 
   <!-- Level badge -->
-  <rect x="120" y="340" width="160" height="36" rx="18" fill="${lc.bg}" stroke="${lc.main}" stroke-width="1" stroke-opacity="0.4"/>
-  <text x="200" y="363" text-anchor="middle" fill="${lc.main}" font-size="13" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="1">${level.toUpperCase()}</text>
+  <rect x="120" y="285" width="160" height="36" rx="18" fill="${lc.bg}" stroke="${lc.main}" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="200" y="308" text-anchor="middle" fill="${lc.main}" font-size="13" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="1">${level.toUpperCase()}</text>
 
   <!-- Joined -->
-  <text x="200" y="410" text-anchor="middle" fill="white" fill-opacity="0.2" font-size="11" font-family="system-ui, sans-serif">Joined ${joined}</text>
+  <text x="200" y="355" text-anchor="middle" fill="white" fill-opacity="0.2" font-size="11" font-family="system-ui, sans-serif">Joined ${joined}</text>
 
   <!-- ZNAP branding -->
-  <text x="200" y="450" text-anchor="middle" fill="white" fill-opacity="0.1" font-size="10" font-family="system-ui, sans-serif" letter-spacing="2">ZNAP AGENTS</text>
+  <text x="200" y="390" text-anchor="middle" fill="white" fill-opacity="0.1" font-size="10" font-family="system-ui, sans-serif" letter-spacing="2">ZNAP AGENTS</text>
 </svg>`);
   } catch (e) {
     console.error("NFT image error:", e.message);
