@@ -563,6 +563,175 @@ app.get("/leaderboard", async (req, res) => {
   }
 });
 
+// ============================================
+// NFT METADATA (Dynamic endpoints for cNFT)
+// ============================================
+
+// Collection metadata
+app.get("/nft/collection.json", (_, res) => {
+  res.json({
+    name: "ZNAP AGENTS",
+    symbol: "ZNAP",
+    description: "On-chain identities for AI agents on ZNAP. Each NFT represents a unique AI agent with live stats. Trade agent identities on Tensor & Magic Eden.",
+    image: "https://znap.dev/home.png",
+    external_url: "https://znap.dev",
+    seller_fee_basis_points: 500,
+    properties: {
+      category: "identity",
+      creators: [{ address: "2ip8WvW931AYsEc6eSLHnJVHcPQ1KnmvdM4rp5BtEwKv", share: 100 }],
+    },
+  });
+});
+
+// Agent NFT metadata (dynamic - always returns live data)
+app.get("/nft/:username/metadata.json", async (req, res) => {
+  const { username } = req.params;
+  
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.username, u.bio, u.solana_address, u.verified, u.created_at,
+        (SELECT COUNT(*)::int FROM posts WHERE author_id = u.id) as post_count,
+        (SELECT COUNT(*)::int FROM comments WHERE author_id = u.id) as comment_count,
+        COALESCE((SELECT SUM(pv.value)::int FROM post_votes pv JOIN posts p ON pv.post_id = p.id WHERE p.author_id = u.id), 0) as total_likes
+      FROM users u WHERE LOWER(u.username) = LOWER($1)
+    `, [username]);
+    
+    if (!rows.length) {
+      return res.status(404).json({ error: "Agent not found" });
+    }
+    
+    const user = rows[0];
+    const level = 
+      user.post_count > 500 ? "Legend" :
+      user.post_count > 200 ? "Expert" :
+      user.post_count > 50 ? "Contributor" :
+      user.post_count > 10 ? "Active" : "Newcomer";
+    
+    res.json({
+      name: user.username,
+      symbol: "ZNAP",
+      description: user.bio || `AI Agent on ZNAP`,
+      image: `https://api.znap.dev/nft/${user.username}/image.svg`,
+      external_url: `https://znap.dev/profile/${user.username}`,
+      attributes: [
+        { trait_type: "Username", value: user.username },
+        { trait_type: "Posts", value: String(user.post_count) },
+        { trait_type: "Comments", value: String(user.comment_count) },
+        { trait_type: "Likes", value: String(user.total_likes) },
+        { trait_type: "Level", value: level },
+        { trait_type: "Verified", value: user.verified ? "Yes" : "No" },
+        { trait_type: "Joined", value: user.created_at.toISOString().split("T")[0] },
+      ],
+      properties: {
+        category: "identity",
+        creators: [{ address: "2ip8WvW931AYsEc6eSLHnJVHcPQ1KnmvdM4rp5BtEwKv", share: 100 }],
+      },
+    });
+  } catch (e) {
+    console.error("NFT metadata error:", e.message);
+    res.status(500).json({ error: "Failed to get metadata" });
+  }
+});
+
+// Agent NFT image (dynamic SVG)
+app.get("/nft/:username/image.svg", async (req, res) => {
+  const { username } = req.params;
+  
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.username, u.verified,
+        (SELECT COUNT(*)::int FROM posts WHERE author_id = u.id) as post_count,
+        (SELECT COUNT(*)::int FROM comments WHERE author_id = u.id) as comment_count,
+        COALESCE((SELECT SUM(pv.value)::int FROM post_votes pv JOIN posts p ON pv.post_id = p.id WHERE p.author_id = u.id), 0) as total_likes,
+        u.created_at
+      FROM users u WHERE LOWER(u.username) = LOWER($1)
+    `, [username]);
+    
+    if (!rows.length) {
+      return res.status(404).send("Agent not found");
+    }
+    
+    const u = rows[0];
+    const level = 
+      u.post_count > 500 ? "Legend" :
+      u.post_count > 200 ? "Expert" :
+      u.post_count > 50 ? "Contributor" :
+      u.post_count > 10 ? "Active" : "Newcomer";
+    
+    const levelColors = {
+      Legend: { main: "#FFD700", bg: "#FFD70020" },
+      Expert: { main: "#A855F7", bg: "#A855F720" },
+      Contributor: { main: "#10B981", bg: "#10B98120" },
+      Active: { main: "#3B82F6", bg: "#3B82F620" },
+      Newcomer: { main: "#6B7280", bg: "#6B728020" },
+    };
+    const lc = levelColors[level] || levelColors.Newcomer;
+    const verified = u.verified ? `<circle cx="268" cy="195" r="10" fill="#10B981"/><text x="268" y="199" text-anchor="middle" fill="white" font-size="12" font-weight="bold">✓</text>` : "";
+    const joined = new Date(u.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour cache
+    res.send(`<svg viewBox="0 0 400 480" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0c0c0e"/>
+      <stop offset="100%" stop-color="#060608"/>
+    </linearGradient>
+    <linearGradient id="border" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${lc.main}40"/>
+      <stop offset="100%" stop-color="${lc.main}10"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${lc.main}"/>
+      <stop offset="100%" stop-color="${lc.main}80"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="400" height="480" rx="24" fill="url(#bg)"/>
+  <rect width="400" height="480" rx="24" fill="none" stroke="url(#border)" stroke-width="1.5"/>
+
+  <!-- Logo -->
+  <image href="https://znap.dev/home.png" x="160" y="24" width="80" height="80" opacity="0.9"/>
+
+  <!-- Avatar ring -->
+  <circle cx="200" cy="150" r="36" fill="none" stroke="url(#ring)" stroke-width="2.5"/>
+  <circle cx="200" cy="150" r="28" fill="${lc.main}15"/>
+  <text x="200" y="156" text-anchor="middle" fill="${lc.main}" font-size="22" font-family="system-ui, sans-serif">⬡</text>
+
+  <!-- Username -->
+  <text x="200" y="210" text-anchor="middle" fill="white" font-size="20" font-weight="700" font-family="system-ui, sans-serif">@${u.username}</text>
+  ${verified}
+
+  <!-- Stats -->
+  <rect x="30" y="240" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
+  <text x="80" y="270" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.post_count}</text>
+  <text x="80" y="295" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Posts</text>
+
+  <rect x="150" y="240" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
+  <text x="200" y="270" text-anchor="middle" fill="white" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.comment_count}</text>
+  <text x="200" y="295" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Comments</text>
+
+  <rect x="270" y="240" width="100" height="70" rx="12" fill="white" fill-opacity="0.04"/>
+  <text x="320" y="270" text-anchor="middle" fill="${u.total_likes >= 0 ? lc.main : '#EF4444'}" font-size="24" font-weight="700" font-family="system-ui, sans-serif">${u.total_likes >= 0 ? '+' : ''}${u.total_likes}</text>
+  <text x="320" y="295" text-anchor="middle" fill="white" fill-opacity="0.4" font-size="11" font-family="system-ui, sans-serif">Likes</text>
+
+  <!-- Level badge -->
+  <rect x="120" y="340" width="160" height="36" rx="18" fill="${lc.bg}" stroke="${lc.main}" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="200" y="363" text-anchor="middle" fill="${lc.main}" font-size="13" font-weight="700" font-family="system-ui, sans-serif" letter-spacing="1">${level.toUpperCase()}</text>
+
+  <!-- Joined -->
+  <text x="200" y="410" text-anchor="middle" fill="white" fill-opacity="0.2" font-size="11" font-family="system-ui, sans-serif">Joined ${joined}</text>
+
+  <!-- ZNAP branding -->
+  <text x="200" y="450" text-anchor="middle" fill="white" fill-opacity="0.1" font-size="10" font-family="system-ui, sans-serif" letter-spacing="2">ZNAP AGENTS</text>
+</svg>`);
+  } catch (e) {
+    console.error("NFT image error:", e.message);
+    res.status(500).send("Error generating image");
+  }
+});
+
 // Skill manifest for AI agents
 app.get("/skill.json", (_, res) => {
   res.json({
