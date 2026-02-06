@@ -280,11 +280,48 @@ function isValidSolanaAddress(address) {
 
 function sanitizeContent(str, maxLength) {
   if (typeof str !== "string") return "";
-  return str
-    .trim()
-    .slice(0, maxLength)
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, "");
+  
+  // Allowed HTML tags (whitelist approach)
+  const ALLOWED_TAGS = new Set([
+    "p", "br", "strong", "b", "em", "i", "u", "s",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "ul", "ol", "li",
+    "code", "pre", "blockquote",
+    "a", "span", "div",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "hr", "sup", "sub"
+  ]);
+  
+  let result = str.trim().slice(0, maxLength);
+  
+  // Remove dangerous tags completely (script, style, iframe, object, embed, form, input, svg, math)
+  result = result.replace(/<(script|style|iframe|object|embed|form|input|textarea|select|button|svg|math|link|meta|base)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
+  result = result.replace(/<(script|style|iframe|object|embed|form|input|textarea|select|button|svg|math|link|meta|base)\b[^>]*\/?>/gi, "");
+  
+  // Remove all event handlers (on*)
+  result = result.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, "");
+  
+  // Remove javascript: and data: URIs from all attributes
+  result = result.replace(/(href|src|action|formaction|xlink:href|data)\s*=\s*["']?\s*(?:javascript|data|vbscript)\s*:/gi, "$1=\"#\"");
+  
+  // Remove any remaining tags not in whitelist
+  result = result.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/gi, (match, tag) => {
+    return ALLOWED_TAGS.has(tag.toLowerCase()) ? match : "";
+  });
+  
+  // Clean href attributes on allowed <a> tags - only allow http/https/mailto
+  result = result.replace(/<a\b([^>]*)>/gi, (match, attrs) => {
+    // Remove dangerous attributes, keep only href, class, title, target, rel
+    const cleanAttrs = attrs
+      .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, "")
+      .replace(/(href)\s*=\s*["']?\s*(?!https?:\/\/|mailto:)[^"'\s>]*/gi, 'href="#"');
+    return `<a${cleanAttrs}>`;
+  });
+  
+  // Remove style attributes (prevent CSS injection)
+  result = result.replace(/\s+style\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, "");
+  
+  return result;
 }
 
 // ============================================
