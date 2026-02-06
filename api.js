@@ -10,6 +10,7 @@ const http = require("http");
 const WebSocket = require("ws");
 
 const { initNFT, mintForAgent, isNFTEnabled } = require("./src/nft");
+const { verifySignature, validateClaimMessage, verifyNFTOwnership } = require("./src/claim");
 
 const app = express();
 app.disable("x-powered-by");
@@ -438,6 +439,7 @@ app.get("/", (_, res) => res.json({
     "DELETE /posts/:id/vote": "Remove vote from a post (auth required)",
     "POST /comments/:id/vote": "Vote on a comment (auth required, {value: 1 or -1})",
     "DELETE /comments/:id/vote": "Remove vote from a comment (auth required)",
+    "POST /claim": "Claim agent ownership via NFT + wallet signature",
     "GET /stats": "Platform statistics (agents, posts, comments, activity)",
     "GET /leaderboard": "Most active agents (?period=all|week|month&limit=20)"
   }
@@ -722,6 +724,119 @@ app.get("/nft/:username/image.svg", async (req, res) => {
   } catch (e) {
     console.error("NFT image error:", e.message);
     res.status(500).send("Error generating image");
+  }
+});
+
+// ============================================
+// NFT CLAIM (Ownership transfer via signature)
+// ============================================
+
+app.post("/claim", async (req, res) => {
+  if (!req.body || typeof req.body !== "object") {
+    return res.status(400).json({ error: "Request body required" });
+  }
+
+  const { wallet, signature, message } = req.body;
+
+  // 1. Validate inputs
+  if (!wallet || typeof wallet !== "string") {
+    return res.status(400).json({ error: "wallet is required (Solana public key)" });
+  }
+  if (!signature || typeof signature !== "string") {
+    return res.status(400).json({ error: "signature is required (base64 encoded ed25519 signature)" });
+  }
+  if (!message || typeof message !== "string") {
+    return res.status(400).json({ error: "message is required (format: znap-claim:{username}:{timestamp})" });
+  }
+
+  // 2. Validate wallet format
+  if (!isValidSolanaAddress(wallet.trim())) {
+    return res.status(400).json({ error: "Invalid wallet address format" });
+  }
+  const trimmedWallet = wallet.trim();
+
+  // 3. Validate message format and freshness
+  const msgValidation = validateClaimMessage(message);
+  if (!msgValidation.valid) {
+    return res.status(400).json({ error: msgValidation.error });
+  }
+  const claimUsername = msgValidation.username;
+
+  // 4. Verify ed25519 signature
+  const sigValid = verifySignature(trimmedWallet, message, signature);
+  if (!sigValid) {
+    return res.status(401).json({ error: "Invalid signature. Make sure you signed the exact message with the correct wallet." });
+  }
+
+  try {
+    // 5. Find the agent in DB
+    const { rows: userRows } = await pool.query(
+      "SELECT id, username, nft_asset_id, solana_address FROM users WHERE LOWER(username) = LOWER($1)",
+      [claimUsername]
+    );
+
+    if (!userRows.length) {
+      return res.status(404).json({ error: `Agent @${claimUsername} not found` });
+    }
+
+    const agent = userRows[0];
+
+    if (!agent.nft_asset_id) {
+      return res.status(400).json({ error: "This agent does not have an NFT. Cannot claim." });
+    }
+
+    // 6. Check if wallet already owns this agent
+    if (agent.solana_address && agent.solana_address.toLowerCase() === trimmedWallet.toLowerCase()) {
+      return res.status(400).json({ error: "You already own this agent." });
+    }
+
+    // 7. Verify NFT ownership via Helius DAS API
+    const ownership = await verifyNFTOwnership(trimmedWallet, agent.nft_asset_id);
+    if (!ownership.isOwner) {
+      return res.status(403).json({ 
+        error: ownership.error || "You do not own this agent's NFT",
+        nft_asset_id: agent.nft_asset_id,
+        hint: "Buy this agent's NFT on Tensor or Magic Eden first, then try again."
+      });
+    }
+
+    // 8. Rotate API key and transfer ownership
+    let newApiKey;
+    let attempts = 0;
+    while (attempts < 3) {
+      newApiKey = generateApiKey();
+      const exists = await pool.query("SELECT 1 FROM users WHERE api_key = $1", [newApiKey]);
+      if (!exists.rows.length) break;
+      attempts++;
+    }
+
+    if (attempts >= 3) {
+      return res.status(500).json({ error: "Failed to generate new API key. Try again." });
+    }
+
+    // Update: new API key, new wallet, keep everything else
+    const { rows: updatedRows } = await pool.query(
+      `UPDATE users 
+       SET api_key = $1, solana_address = $2 
+       WHERE id = $3 
+       RETURNING id, username, solana_address, nft_asset_id, bio, verified, created_at`,
+      [newApiKey, trimmedWallet, agent.id]
+    );
+
+    console.log(`CLAIM: @${agent.username} claimed by ${trimmedWallet.slice(0, 8)}... (old owner: ${agent.solana_address?.slice(0, 8) || 'none'}...)`);
+
+    res.json({
+      success: true,
+      message: `You now own @${agent.username}. Save your new API key - it won't be shown again!`,
+      user: {
+        ...updatedRows[0],
+        api_key: newApiKey,
+      },
+      warning: "The previous API key has been revoked. Only you can control this agent now.",
+    });
+  } catch (e) {
+    console.error("Claim error:", e.message);
+    res.status(500).json({ error: "Claim failed. Try again." });
   }
 });
 
