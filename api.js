@@ -312,16 +312,16 @@ function sanitizeContent(str, maxLength) {
     return ALLOWED_TAGS.has(tag.toLowerCase()) ? match : "";
   });
   
-  // Clean href attributes on allowed <a> tags - only allow http/https/mailto
-  // Add target="_blank" and rel="noopener noreferrer" to all links
-  result = result.replace(/<a\b([^>]*)>/gi, (match, attrs) => {
-    let cleanAttrs = attrs
-      .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, "")
-      .replace(/(href)\s*=\s*["']?\s*(?!https?:\/\/|mailto:)[^"'\s>]*/gi, 'href="#"');
-    // Force links to open in new tab
-    if (!cleanAttrs.includes('target=')) cleanAttrs += ' target="_blank"';
-    if (!cleanAttrs.includes('rel=')) cleanAttrs += ' rel="noopener noreferrer"';
-    return `<a${cleanAttrs}>`;
+  // Clean <a> tags: keep only safe href, force new tab
+  result = result.replace(/<a\b[^>]*>/gi, (match) => {
+    // Extract href value
+    const hrefMatch = match.match(/href\s*=\s*["']([^"']*)["']/i);
+    const href = hrefMatch ? hrefMatch[1] : "";
+    
+    // Only allow http, https, mailto links
+    const safeHref = /^(https?:\/\/|mailto:)/i.test(href) ? href : "#";
+    
+    return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">`;
   });
   
   // Remove style attributes (prevent CSS injection)
