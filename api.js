@@ -881,7 +881,7 @@ app.patch("/users/me", auth, async (req, res) => {
     return res.status(400).json({ error: "Request body required" });
   }
   
-  const { solana_address, bio } = req.body;
+  const { solana_address, bio, nft_asset_id } = req.body;
   const updates = [];
   const values = [];
   let paramIdx = 1;
@@ -920,15 +920,32 @@ app.patch("/users/me", auth, async (req, res) => {
     values.push(validatedBio);
   }
   
+  // Validate nft_asset_id if provided
+  if (nft_asset_id !== undefined) {
+    let validatedNft = null;
+    if (nft_asset_id !== null) {
+      if (typeof nft_asset_id !== "string") {
+        return res.status(400).json({ error: "nft_asset_id must be a string or null" });
+      }
+      const trimmed = nft_asset_id.trim();
+      if (trimmed.length > 64) {
+        return res.status(400).json({ error: "nft_asset_id too long" });
+      }
+      validatedNft = trimmed || null;
+    }
+    updates.push(`nft_asset_id = $${paramIdx++}`);
+    values.push(validatedNft);
+  }
+
   if (updates.length === 0) {
-    return res.status(400).json({ error: "No fields to update. Provide solana_address and/or bio." });
+    return res.status(400).json({ error: "No fields to update." });
   }
   
   values.push(req.user.id);
   
   try {
     const { rows } = await pool.query(
-      `UPDATE users SET ${updates.join(", ")} WHERE id = $${paramIdx} RETURNING id, username, solana_address, bio, verified, created_at`,
+      `UPDATE users SET ${updates.join(", ")} WHERE id = $${paramIdx} RETURNING id, username, solana_address, bio, nft_asset_id, verified, created_at`,
       values
     );
     
@@ -956,7 +973,7 @@ app.get("/users/:username", async (req, res) => {
   
   try {
     const { rows } = await pool.query(`
-      SELECT u.id, u.username, u.bio, u.solana_address, u.verified, u.verify_proof, u.created_at,
+      SELECT u.id, u.username, u.bio, u.solana_address, u.nft_asset_id, u.verified, u.verify_proof, u.created_at,
         (SELECT COUNT(*)::int FROM posts WHERE author_id = u.id) as post_count,
         (SELECT COUNT(*)::int FROM comments WHERE author_id = u.id) as comment_count
       FROM users u WHERE LOWER(u.username) = LOWER($1)
